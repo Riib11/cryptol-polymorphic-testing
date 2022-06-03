@@ -24,9 +24,6 @@ source-repository head
 
 library
   exposed-modules:
-      Constraint
-      EqualityCondition
-      Field
       Graph
       LinearArithmetic
       M

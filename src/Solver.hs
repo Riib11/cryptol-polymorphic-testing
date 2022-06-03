@@ -3,229 +3,141 @@
 module Solver where
 
 import Control.Arrow
+import Control.Monad
 import qualified Data.Set as Set
-import qualified Data.Map as Map
-import M
-import Graph
-import PolyGraph
+import Data.Maybe
 import Symbol
+import Normal
 import N
 import Z
 import Q
-import Field
-import Normal
-import LinearArithmetic
-import EqualityCondition
-import Constraint
+import LinearArithmetic.Polynomial as Polynomial
+import Nondet
 
--- | DependencyGraph
+-- | Constraint
+data Constraint a
+  = Relation Re (Polynomial a) (Polynomial a) -- a + sum(bi * xi) ~ c + sum(dj * yj)
+  | Typeclass Typeclass
 
-type DependencyGraph = PolyGraph Symbol Dependency
+instance (Show a, Num a, Eq a) => Show (Constraint a) where
+  show (Relation re p1 p2) = concat ["(", show p1, show re, show p2, ")"]
+  show (Typeclass tc) = show tc
 
-data Dependency
-  = Dependency_EqualityCondition (EqualityCondition (LinearArithmetic Q))
-  | Dependency_SolvedDependency SolvedDependency
+-- primive relations
+data Re = Eq | Le | Ge deriving (Eq)
 
-instance Show Dependency where
-  show (Dependency_EqualityCondition eq) = show eq
-  show (Dependency_SolvedDependency solDep) = show solDep
+instance Show Re where 
+  show Eq = " = "
+  show Le = " ≤ "
+  show Ge = " ≥ "
 
-toDependencyGraph :: [Constraint EqualityCondition LinearArithmetic Q] -> M DependencyGraph
-toDependencyGraph = pure . foldr f mempty
-  where 
-    f (Cond (Equal a1 a2)) = PolyGraph.addEdge (symbols a1 <> symbols a2, Dependency_EqualityCondition (Equal a1 a2))
-    f (Prime x) = PolyGraph.addEdge (Set.singleton x, Dependency_SolvedDependency (SolvedPrime x))
-    f (Fin x) = PolyGraph.addEdge (Set.singleton x, Dependency_SolvedDependency (SolvedFin x))
+flipRe :: Re -> Re 
+flipRe Eq = Eq 
+flipRe Le = Ge
+flipRe Ge = Le
 
--- | NormalizedDependencyGraph
+-- primitive typeclasses
+data Typeclass
+  = Prime Symbol
+  | Fin Symbol
 
-type NormalizedDependencyGraph = PolyGraph Symbol NormalizedDependency
+instance Show Typeclass where 
+  show (Prime x) = "(prime " ++ show x ++ ")"
+  show (Fin x) = "(fin" ++ show x ++ ")"
 
-data NormalizedDependency 
-  = NormalizedDependency_LinearArithmeticEquation (LinearArithmeticEquation Q)
-  | NormalizedDependency_SolvedDependency SolvedDependency
+-- | SolvedConstraint
+data SolvedConstraint a 
+  = SolvedRelation Symbol Re (Polynomial a) -- a ~ b + sum(ci * xi)
+  | SolvedTypeclass Typeclass
 
-instance Show NormalizedDependency where 
-  show (NormalizedDependency_LinearArithmeticEquation eq) = show eq
-  show (NormalizedDependency_SolvedDependency dep) = show dep 
+instance (Show a, Num a, Eq a) => Show (SolvedConstraint a) where
+  show (SolvedRelation x re p) = 
+    "solved" ++ unwords ["(", show x, show re, show p, ")"]
+  show (SolvedTypeclass tc) = "solved" ++ show tc
 
--- encodes f[x1, ..., xN] = 0, where f is a linear arithmetic expression
-newtype LinearArithmeticEquation dom = LinearArithmeticEquation (LinearArithmetic dom) deriving (Eq, Functor)
+-- solves each relation for one variable to put on the LHS
+toSolvedConstraintQ :: Constraint Q -> Nondet (SolvedConstraint Q)
+toSolvedConstraintQ (Relation re lhs rhs) = do
+  -- move everything to LHS
+  let lhs' = lhs <> (negate <$> rhs)
+  -- choose a variable to solve for
+  let vars = symbols lhs'
+  x <- choices (Set.toList vars)
+  -- solve for the chosen variable
+  let rhs' = 
+        foldr (>>>) id 
+          [ delete x -- keep x on LHS
+          , fmap negate -- move everything else to RHS
+          , fmap (/ coefficient x lhs') -- divide by coefficient of x
+          ]
+          lhs'
+  -- flip relation if divided by a negative
+  let re' = flipRe re
+  --
+  pure $ SolvedRelation x re' rhs'
+toSolvedConstraintQ (Typeclass tc) =
+  pure $ SolvedTypeclass tc
 
-instance Show dom => Show (LinearArithmeticEquation dom) where
-  show (LinearArithmeticEquation a) = show a ++ " = 0"
+-- tries to round numbers from Q to N
+toSolvedConstraintZ :: SolvedConstraint Q -> Nondet (SolvedConstraint Z)
 
-toNormalizedDependencyGraph :: DependencyGraph -> M NormalizedDependencyGraph
-toNormalizedDependencyGraph dg = do
-  logM "toNormalizedDependencyGraph" (show dg)
-  PolyGraph.liftOutEdge $ fmap f dg
-  where
-    f (Dependency_EqualityCondition eq) = NormalizedDependency_LinearArithmeticEquation <$> toLinearArithmeticEquation eq
-    f (Dependency_SolvedDependency sd) = pure $ NormalizedDependency_SolvedDependency sd
+toSolvedConstraintZ (SolvedRelation x Eq rhs) = do
+  -- equalities with an RHS that has non-integer coefficients are discarded
+  guard $ all (isJust . toZ) (coefficients rhs)
+  pure $ SolvedRelation x Eq (fromJust . toZ <$> rhs)
+-- 
+toSolvedConstraintZ (SolvedRelation x Le rhs) =
+  pure $ SolvedRelation x Eq (roundDown <$> rhs)
+toSolvedConstraintZ (SolvedRelation x Ge rhs) =
+  pure $ SolvedRelation x Eq (roundUp <$> rhs)
+-- 
+toSolvedConstraintZ (SolvedTypeclass tc) = pure $ SolvedTypeclass tc
 
-toLinearArithmeticEquation :: EqualityCondition (LinearArithmetic Q) -> M (LinearArithmeticEquation Q)
-toLinearArithmeticEquation eq@(Equal a1 a2) = do 
-  logM "toLinearArithmeticEquation [input]" (show eq)
-  eq <- a1 `subLA` a2
-  logM "toLinearArithmeticEquation [ouput]" (show eq)
-  pure $ LinearArithmeticEquation eq
+-- | SafeConstraint
 
--- | SolvedDependencyGraph
+data SafeConstraint
+  = SafeRelation Symbol Re (Polynomial Z)
+  | SafeTypeclass Typeclass
 
--- x --{y = f[x]}--> y, where f is a linear arithmetic expression
-type SolvedDependencyGraph = Graph Symbol SolvedDependency
+instance Show SafeConstraint where
+  show (SafeRelation x re p) =
+    "safe" ++ concat ["(", show x, show re, show p, ")"]
+  show (SafeTypeclass tc) = "safe" ++ show tc
 
--- | SolvedDependency
-
-data SolvedDependency
-  = SolvedAssignment Symbol (LinearArithmetic N) -- x = f[y1, ..., yN], where f is an linear arithmetic expression
-  | SolvedUpperBound Symbol N
-  | SolvedLowerBound Symbol N
-  | SolvedPrime Symbol -- prime x
-  | SolvedFin Symbol -- fin x
-
-instance Show SolvedDependency where
-  show (SolvedAssignment x a) = show x ++ " := " ++ show a
-  show (SolvedUpperBound x n) = show x ++ " :<= " ++ show n
-  show (SolvedLowerBound x n) = show x ++ " :>= " ++ show n
-  show (SolvedPrime x) = "prime(" ++ show x ++ ")"
-  show (SolvedFin x) = "fin(" ++ show x ++ ")"
-
-toSolvedDependencyGraph :: NormalizedDependencyGraph -> M SolvedDependencyGraph
-toSolvedDependencyGraph ndg =
-  foldr
-    (\(vs, nd) m_ndg -> case nd of 
-      NormalizedDependency_LinearArithmeticEquation eq -> 
-        caseM (toSolvedDependencies eq) >>= \case
-          Left msg -> throwM msg
-          Right solDeps ->
-            foldr
-              (\solDep m_ndg -> case solDep of 
-                SolvedAssignment x a -> 
-                    (foldr (>>>) id 
-                      [ Graph.addEdge (x, y, solDep) | y <- Set.toList (symbolsLinearArithmetic a) ]) 
-                    <$> m_ndg
-                SolvedUpperBound x n -> fmap (Graph.addEdge (x, x, SolvedUpperBound x n)) m_ndg
-                SolvedLowerBound x n -> fmap (Graph.addEdge (x, x, SolvedLowerBound x n)) m_ndg
-                SolvedPrime x -> fmap (Graph.addEdge (x, x, SolvedPrime x)) m_ndg
-                SolvedFin x -> fmap (Graph.addEdge (x, x, SolvedFin x)) m_ndg
-              )
-              m_ndg
-              solDeps
-      NormalizedDependency_SolvedDependency (SolvedPrime x) -> fmap (Graph.addEdge (x, x, SolvedPrime x)) m_ndg
-      NormalizedDependency_SolvedDependency (SolvedFin x) -> fmap (Graph.addEdge (x, x, SolvedFin x)) m_ndg
-    )
-    (pure mempty)
-    (PolyGraph.edges ndg)
-
--- eliminate all denomenators
--- partition by positive/negative terms
--- check if in a simple form:
--- • exactly 1 positive term
--- • exactly 1 negative term
-toSolvedDependencies :: LinearArithmeticEquation Q -> M [SolvedDependency]
-toSolvedDependencies eq0@(LinearArithmeticEquation (Sum c0 tms0)) = 
-  let 
-    -- eliminate denomenators    
-    ns = c0 : coefficients tms0 -- constant and coefficients
-    dens = denomenator <$> ns -- denomenators
-    lcm_dens = lcmList dens -- lcm of denomenators
-    eliminate_denomenator (Q a b) = a * fromN lcm_dens
-    eq1@(LinearArithmeticEquation (Sum c1 tms1)) = eliminate_denomenator <$> eq0
-
-    -- ensure constant is negative
-    eq2@(LinearArithmeticEquation (Sum c2 tms2)) = if c1 > 0 then negate <$> eq1 else eq1
-    -- 
-    c = toN $ negate c2
-
-    -- partition terms into those with positive/negative coefficients
-    -- positives = map (\(s, c) -> (s, toN c)) .  filter (\(s, c) -> c >= 0) $ tmsList2
-    tmsPos = fmap toN . overTerms (Map.filter (>= 0)) $ tms2
-    -- negatives = map (\(s, c) -> (s, toN c)) . filter (\(s, c) -> c <  0) $ tmsList2
-    tmsNeg = fmap toN . overTerms (Map.filter (< 0)) $ tms2
-    
-    -- result is in the form:
-    -- sum(ai*xi) - sum(bj*yj) == c
-    -- where 
-    -- • sum(ai*xi) is the sum of positive terms
-    -- • - sum(bj*yj) is the sum of negatve terms
-  in 
-    -- handle specific forms
+-- if a term in the RHS has a negative coeffcient, then need to make sure that the amount being subtracted is less than the amount being subtracted from
+toSafeConstraints :: SolvedConstraint Z -> Nondet [SafeConstraint]
+toSafeConstraints (SolvedRelation x re rhs) =
+  let
+    c = constant rhs -- constant
+    ptvs = Polynomial.filter (>= 0) rhs -- positif terms (i.e. non-negative)
+    negs = Polynomial.filter (< 0) rhs -- negative terms
+  in
     if
-      -- a*x = c
-      | [(x, a)] <- toTermsList tmsPos, [] <- toTermsList tmsNeg -> 
-        -- TODO: figure out which way to round c
-        undefined
-      -- -a*x = c
-      | [] <- toTermsList tmsPos, [(a, x)] <- toTermsList tmsNeg ->
-        -- TODO: figure out which way to round c
-        undefined
-      -- a*x = c + sum(bj*yj)
-      | [(x, a)] <- toTermsList tmsPos ->
-        let 
-          negativeQuotRems = (`quotRem` a) <$> tmsNeg
-        in
-          -- check that each bj can be divided by a
-          if all ((== 0) . snd) negativeQuotRems then 
-            let
-              c' = undefined -- TODO: figure out which way to round this
-              tmsNeg' = fst <$> negativeQuotRems
-              -- result is in the form:
-              -- x = c + sum(bi + yi) where c, bi : N
-            in
-              pure [SolvedAssignment x (Sum c' tmsNeg')]
-          else
-            throwM $ "the RHS of `LinearArithmeticEquation Q` cannot be divided by the coefficient of variable being solved for in the following: " ++ show eq2
-      -- TODO: what other forms are interesting?
-      | otherwise -> throwM $ "the `LinearArithmeticEquation Q` is not of a form that can be solved: " ++ show eq2
+      | -- x = c
+        Polynomial.size ptvs == 0 && Polynomial.size negs == 0
+      -> pure []
+      | -- x = sum(ai*yi) + c
+        Polynomial.size ptvs >= 1 && Polynomial.size negs == 0 
+      -> pure [SafeRelation x re rhs]
+      | -- x = sum(ai*yi) + c - sum(bj*zj)
+        Polynomial.size ptvs >= 1 && Polynomial.size negs >= 1
+      -> do
+        -- sum(bj*zj) <= sum(ai*yi) + c
+        -- TODO: make sure no infinite loops here, since recursive
+        safeCons <- solve 
+          [ Relation Le 
+              (fromZ . abs <$> negs)
+              ((fromZ <$> ptvs) <> (fromZ <$> Polynomial.singleton c)) ]
+        pure $ SafeRelation x re rhs : safeCons
+toSafeConstraints (SolvedTypeclass tc) = 
+  pure [SafeTypeclass tc]
 
--- | Solution
+-- | solve
+-- TODO: test on some complicated expressions
 
-newtype Solution = Solution [SolvedDependency] deriving (Show)
-
--- | Solver algorithm:
--- 1. LinearConstraint
--- 2. DependencyGraph
--- 3. NormalizedDependencyGraph
--- 4. SolvedDependencyGraph
--- 5. Solution
-solve :: [Constraint Condition Arithmetic Q] -> M Solution
-solve cons = do
-  linCons <- fmap toLinearConstraint >>> sequence $ cons
-  logM "linCons" $ unwords (show <$> linCons)
-
-  depGraph <- toDependencyGraph linCons
-  logM "depGraph" $ show depGraph
-
-  normDepGraph <- toNormalizedDependencyGraph depGraph
-  logM "normDepGraph" $ show normDepGraph
-
-  solDepGraph <- toSolvedDependencyGraph normDepGraph
-  logM "solDepGraph" $ show solDepGraph
-
-  sol <- toSolution solDepGraph
-  pure sol
-
-  -- throwM "escape"
-
-toSolution :: SolvedDependencyGraph -> M Solution
-toSolution sdg = 
-  if isValidSolution then 
-    pure . Solution $ (\(_, _, solDep) -> solDep) <$> Graph.edges sdg
-  else 
-    throwM $ "the SolvedDependencyGraph is not a valid solution: " ++ show sdg
-  where 
-    isValidSolution =
-      -- each variable is determined by up to one other variable
-      all 
-        (\x -> length (filter (\(y, _, _) -> x == y) (Graph.edgesTo x sdg)) <= 1)
-        (Graph.vertices sdg)
-
-toLinearConstraint :: Constraint Condition Arithmetic Q -> M (Constraint EqualityCondition LinearArithmetic Q)
-toLinearConstraint (Cond cond) = do
-  let Equal a1 a2 = toEqualityCondition cond
-  a1' <- toLinearArithmetic a1
-  a2' <- toLinearArithmetic a2
-  pure $ Cond (Equal a1' a2')
-toLinearConstraint (Prime s) = pure $ Prime s
-toLinearConstraint (Fin s) = pure $ Fin s
+solve :: [Constraint Q] -> Nondet [SafeConstraint]
+solve cons = do 
+  solConQs <- sequence $ toSolvedConstraintQ <$> cons
+  solConZs <- sequence $ toSolvedConstraintZ <$> solConQs
+  safeCons <- fmap mconcat . sequence $ toSafeConstraints <$> solConZs
+  pure safeCons
