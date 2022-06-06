@@ -1,9 +1,14 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Q where
 
+import Data.String as String
+import Data.List as List
 import Normal
 import N
 import Z
 import GHC.Real
+import ListUtil
 
 -- | Q
 
@@ -23,11 +28,30 @@ fromZ :: Z -> Q
 fromZ a = Q a 1
 
 roundDown :: Q -> Z
-roundDown (Q a b) = undefined
+roundDown q =
+  if a >= 0 then 
+    let (x, r) = toN a `quotRem` b in
+      fromIntegral x
+  else
+    let (x, r) = toN (negate a) `quotRem` b in
+      if r == 0 
+        then -(fromIntegral x)
+        else -(fromIntegral x) - 1
+  where 
+    Q a b = normalize q
 
 roundUp :: Q -> Z
-roundUp (Q a b) = undefined
-
+roundUp q =
+  if a >= 0 then 
+    let (x, r) = toN a `quotRem` b in
+      if r == 0
+        then fromIntegral x
+        else fromIntegral x + 1
+  else
+    let (x, r) = toN (negate a) `quotRem` b in
+      -(fromIntegral x)
+  where 
+    Q a b = normalize q
 
 instance Show Q where 
   show (Q a b) = "(" ++ show a ++ "/" ++ show b ++ ")"
@@ -67,7 +91,25 @@ instance Normal Q where
   simplify (Q a b) = go (N.gcd (toEnum a) b)
     where 
       go n | n == 1 = Nothing
-      go n | (a', 0) <- toEnum a `quotRem` n
+      go n | (a', 0) <- toEnum (abs a) `quotRem` n
            , (b', 0) <- b `quotRem` n
            = Just $ Q (signum a * fromEnum a') b'
+      go n = Nothing
+  -- simplify (Q a b) | a < 0 = go (N.gcd (toEnum na) b) 
+  --   where 
+  --     na = negate a
+  --     go n | n == 1 = Nothing
+  --     go n | (a', 0) <- toEnum na `quotRem` n
+  --          , (b', 0) <- b `quotRem` n
+  --          = Just $ Q (signum a * fromEnum a') b'
   
+
+instance IsString Q where 
+  fromString =
+    (\case 
+      [a] -> Q (read a) 1
+      -- [a, b] -> error $ show [a,b] -- Q (read a) (fromString b)
+      [a, b] -> Q (read a) (fromString b)
+    ) .
+    splitBy "/" .
+    trim (`elem` [' ', '(', ')'])

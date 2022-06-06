@@ -1,5 +1,6 @@
 module N where
 
+import Data.String
 import Prelude hiding (gcd, lcm)
 import Data.List
 import System.IO.Unsafe (unsafePerformIO)
@@ -106,3 +107,6 @@ lcm m n = (m * n) `divus` gcd m n
 lcmList :: [N] -> N
 lcmList [] = 0
 lcmList ns@(n:_) = foldr lcm n ns
+
+instance IsString N where
+  fromString = fromInteger . read

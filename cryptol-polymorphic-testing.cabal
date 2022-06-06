@@ -24,13 +24,17 @@ source-repository head
 
 library
   exposed-modules:
+      Constraint
+      Debug
       Graph
-      LinearArithmetic
+      LinearArithmetic.Polynomial
+      ListUtil
       M
       N
       Normal
       PolyGraph
       Q
+      Sampler
       Solver
       Symbol
       Z
@@ -41,6 +45,7 @@ library
   build-depends:
       base >=4.7 && <5
     , containers
+    , list-t
     , mtl
   default-language: Haskell2010
 
@@ -55,5 +60,6 @@ test-suite cryptol-polymorphic-testing-test
       base >=4.7 && <5
     , containers
     , cryptol-polymorphic-testing
+    , list-t
     , mtl
   default-language: Haskell2010
