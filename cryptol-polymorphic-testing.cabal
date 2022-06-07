@@ -26,18 +26,14 @@ library
   exposed-modules:
       Constraint
       Debug
+      Expr
       Graph
-      LinearArithmetic.Polynomial
-      ListUtil
       M
-      N
       Normal
       PolyGraph
-      Q
-      Sampler
-      Solver
+      Sample
+      Solving
       Symbol
-      Z
   other-modules:
       Paths_cryptol_polymorphic_testing
   hs-source-dirs:

@@ -2,7 +2,7 @@ module Symbol where
 
 import Data.IORef as IORef
 import Data.String (IsString(..))
-import Data.Set
+import qualified Data.Set as Set
 import System.IO.Unsafe (unsafePerformIO)
 
 -- | Symbol
@@ -15,9 +15,12 @@ data Symbol
 instance IsString Symbol where 
   fromString = Symbol
 
+alphabet = ['a'..'z']
+
 instance Show Symbol where 
   show (Symbol s) = s
-  show (FreshSymbol i) = "@" ++ show i
+  -- show (FreshSymbol i) = "$" ++ [ alphabet !! (i `mod` length alphabet) ]
+  show (FreshSymbol i) = "'" ++ [ alphabet !! (i `mod` length alphabet) ]
 
 {-# NOINLINE freshSymbolCountRef #-}
 freshSymbolCountRef :: IORef Int
@@ -26,17 +29,22 @@ freshSymbolCountRef = unsafePerformIO $ newIORef 0
 genFreshSymbol :: () -> Symbol
 genFreshSymbol _ = unsafePerformIO $ do
   i <- readIORef freshSymbolCountRef
-  modifyIORef freshSymbolCountRef (+1)
+  modifyIORef freshSymbolCountRef (+1) 
   pure $ FreshSymbol i
 
 -- | Symbolic
 
 class Symbolic a where
-  {-# MINIMAL symbol, symbols #-}
+  {-# MINIMAL fromSymbol, symbolSet #-}
 
-  symbol :: Symbol -> a
+  fromSymbol :: Symbol -> a
   
-  symbols :: a -> Set Symbol
+  symbolSet :: a -> Set.Set Symbol
   
-  freshSymbol :: () -> a
-  freshSymbol = symbol . genFreshSymbol
+  fresh :: () -> a
+  fresh = fromSymbol . genFreshSymbol
+
+instance Symbolic Symbol where 
+  fromSymbol = id
+  symbolSet = Set.singleton
+  fresh = genFreshSymbol

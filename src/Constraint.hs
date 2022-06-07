@@ -1,75 +1,46 @@
 module Constraint where 
 
-import Control.Arrow
-import Control.Monad
-import qualified Data.Set as Set
-import Control.Applicative
-import Data.Maybe
+import Data.Set as Set
 import Symbol
-import Normal
-import N
-import Z
-import Q
-import LinearArithmetic.Polynomial as P
+import Expr
 
--- | Constraint
-data Constraint a
-  = Relation Re (Polynomial a) (Polynomial a) -- a + sum(bi * xi) ~ c + sum(dj * yj)
-  | Typeclass Symbol Typeclass
+data Constraint
+  = Relation Re Expr Expr 
+  | Typeclass Symbol Tc
+  deriving (Eq)
 
-instance (Show a, Num a, Eq a) => Show (Constraint a) where
-  show (Relation re p1 p2) = concat ["(", show p1, show re, show p2, ")"]
-  show (Typeclass x tc) = unwords [show tc, show x]
+data Re = Eq | Leq | Geq deriving (Eq, Show)
 
--- primive relations
-data Re = Eq | Le | Ge deriving (Eq)
+data Tc = Fin | Prime deriving (Eq, Show)
 
-instance Show Re where 
-  show Eq = " = "
-  show Le = " ≤ "
-  show Ge = " ≥ "
+instance Show Constraint where 
+  show (Relation r e1 e2) = case r of 
+    Eq  -> s1 ++ " == " ++ show e2
+    Leq -> s1 ++ " <= " ++ show e2
+    Geq -> s1 ++ " >= " ++ show e2
+    where
+      s1 = case e1 of 
+        _ | [x] <- Set.toList $ symbolSet e1 -> show x
+        _ | otherwise -> show e1
+  show (Typeclass x tc) = case tc of 
+    Fin -> "fin(" ++ show x ++ ")"
+    Prime -> "prime(" ++ show x ++ ")"
 
-flipRe :: Re -> Re 
-flipRe Eq = Eq 
-flipRe Le = Ge
-flipRe Ge = Le
+symbolSetConsraint :: Constraint -> Set.Set Symbol
+symbolSetConsraint (Relation re e1 e2) = symbolSet e1 <> symbolSet e2
+symbolSetConsraint (Typeclass x _) = Set.singleton x
 
--- primitive typeclasses
-data Typeclass = Prime | Fin 
+symbolExprEqualityLhs :: Constraint -> [(Symbol, Expr)]
+symbolExprEqualityLhs (Relation re e1 e2) 
+  | [x] <- Set.toList $ symbolSet e1 = [(x, e2)]
+  | otherwise = []
+symbolEqualityLHS _ = []
 
-instance Show Typeclass where 
-  show Prime = "prime"
-  show Fin = "fin"
+symbolSetEqualityRhs :: Constraint -> Set.Set Symbol
+symbolSetEqualityRhs (Relation re e1 e2) = symbolSet e2
+symbolSetEqualityRhs _ = mempty
 
--- | SolvedConstraint
-data SolvedConstraint a 
-  = SolvedRelation Symbol Re (Polynomial a) -- a ~ b + sum(ci * xi)
-  | SolvedTypeclass Symbol Typeclass
-
-instance (Show a, Num a, Eq a) => Show (SolvedConstraint a) where
-  show (SolvedRelation x re p) = 
-    "solved" ++ unwords ["(", show x, show re, show p, ")"]
-  show (SolvedTypeclass x tc) =
-    "solved" ++ unwords ["(", show tc, show x, ")"]
-
--- | SafeConstraint
-
-data SafeConstraint
-  = SafeRelation Symbol Re (Polynomial Z)
-  | SafeTypeclass Symbol Typeclass
-
-instance Show SafeConstraint where
-  show (SafeRelation x re p) =
-    "safe" ++ concat ["(", show x, show re, show p, ")"]
-  show (SafeTypeclass x tc) = 
-    "safe" ++ unwords ["(", show tc, show x, ")"]
-
--- | SampleRange
-
-data SampleRange = SampleRange
-  { upperBounds :: [Polynomial Z],
-    typeclasses :: [Typeclass]
-  }
-
-instance Show SampleRange where 
-  show (SampleRange upBnds tcs) = unwords ["<=", show upBnds, show tcs]
+negateRe :: Re -> Re
+negateRe Eq = Eq 
+negateRe Geq = Leq
+negateRe Leq = Geq
