@@ -1,25 +1,31 @@
-module M where 
+module M where
 
 import Control.Monad.Trans
-import ListT
-import qualified Data.List as List
+import Control.Monad
+import qualified ListT as ListT
 
-type M a = ListT IO a
+type M a = ListT.ListT IO a
+
+debugLevel :: Int
+debugLevel = 0
+
+debug :: Int -> String -> M ()
+debug l msg = 
+  when (l <= debugLevel)
+    (lift . putStrLn $ msg)
 
 runM :: M a -> IO [a]
-runM = toList
+runM = ListT.toList
 
 choose :: Show a => [a] -> M a 
 choose xs = do
-  lift . putStrLn $ "[>] choose from: " ++ show xs 
-  fromFoldable xs
+  debug 0 $ "choosing from: " ++ show xs
+  ListT.fromFoldable xs
 
-impossible :: M a 
-impossible = fromFoldable []
-
-debug :: String -> M ()
-debug msg = 
-  case lines msg of 
-    [] -> pure ()
-    [s] -> lift . putStrLn $ "[*] " ++ s
-    ls -> lift . putStrLn $ "[*] " ++ List.intercalate "\n   " ls
+assert :: String -> Bool -> M ()
+assert msg b =
+  if b 
+    then pure ()
+    else do
+      debug 0 $ "rejected; false assertion: " ++ msg
+      guard False

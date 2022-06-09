@@ -25,15 +25,13 @@ source-repository head
 library
   exposed-modules:
       Constraint
-      Debug
-      Expr
-      Graph
       M
-      Normal
-      PolyGraph
-      Sample
-      Solving
-      Symbol
+      Mat
+      Q
+      Solver
+      SolverLib
+      Utils
+      Var
   other-modules:
       Paths_cryptol_polymorphic_testing
   hs-source-dirs:
@@ -43,6 +41,7 @@ library
     , containers
     , list-t
     , mtl
+    , vector-sized
   default-language: Haskell2010
 
 test-suite cryptol-polymorphic-testing-test
@@ -58,4 +57,5 @@ test-suite cryptol-polymorphic-testing-test
     , cryptol-polymorphic-testing
     , list-t
     , mtl
+    , vector-sized
   default-language: Haskell2010

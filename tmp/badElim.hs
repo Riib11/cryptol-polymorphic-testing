@@ -1,0 +1,32 @@
+-- gaussElim :: Mat -> IO Mat
+-- gaussElim m =
+--   let 
+--     n = nRows m
+--     -- for m xs f = foldr f m ((\x -> x - 1) <$> xs)
+--     for m xs f = foldM (flip f) m xs
+--   in
+--     for m [1 .. n-1] \i m' -> do
+--       putStrLn $ "i = " ++ show i
+--       if m!(i,i) == 0 then
+--         error $ "Illegal 0 at index " ++ show (i,i)
+--       else
+--         for m' [i+1 .. n] \j m' -> do
+--           putStrLn $ "j = " ++ show j
+--           let ratio = (m!(j,i)) / (m!(i,i))
+--           putStrLn $
+--             "ratio = " ++ 
+--             showIx(j,i) ++ "/" ++ showIx(i,i) ++ "\n      = " ++ 
+--             showQ(m!(j,i)) ++ "/" ++ showQ(m!(i,i)) ++ "\n      = " ++
+--             showQ ratio
+--           for m' [1 .. n+1] \k m' -> do
+--             putStrLn $ "k = " ++ show k
+--             putStrLn $
+--               showIx(j,k) ++ " = " ++
+--               showIx(j,j) ++ " - " ++ showQ ratio ++ " * " ++ showIx (i,k) ++ "\n       = " ++
+--               showQ(m!(j,j)) ++ " - " ++ showQ ratio ++ " * " ++ showQ(m!(i,k)) ++ "\n       = " ++
+--               showQ (ratio * m!(i,k))
+--             pure $ modify (j,k) (\x -> x - ratio * m!(i,k)) m'
+
+-- solve :: Mat -> IO [Q]
+-- solve m = do
+--   m' <- gaussElim

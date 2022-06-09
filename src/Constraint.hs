@@ -1,46 +1,41 @@
 module Constraint where 
 
-import Data.Set as Set
-import Symbol
-import Expr
+import qualified Data.Map as Map
+import Q
+import Var
 
-data Constraint
-  = Relation Re Expr Expr 
-  | Typeclass Symbol Tc
-  deriving (Eq)
+data Constraint = Relation Re Expr Q
+data Re = Eq | Leq | Geq deriving (Eq)
+type Expr = Map.Map Var Q
+data Equation = Equation Var Expr Q deriving (Eq) -- x = e + c
 
-data Re = Eq | Leq | Geq deriving (Eq, Show)
+isSimpleConstraint :: Constraint -> Bool
+isSimpleConstraint (Relation r e q) =
+  r `elem` [Leq, Geq] && isSingletonExpr e
 
-data Tc = Fin | Prime deriving (Eq, Show)
+subConstraint :: [Equation] -> Constraint -> Constraint
+subConstraint = undefined -- TODO
 
-instance Show Constraint where 
-  show (Relation r e1 e2) = case r of 
-    Eq  -> s1 ++ " == " ++ show e2
-    Leq -> s1 ++ " <= " ++ show e2
-    Geq -> s1 ++ " >= " ++ show e2
-    where
-      s1 = case e1 of 
-        _ | [x] <- Set.toList $ symbolSet e1 -> show x
-        _ | otherwise -> show e1
-  show (Typeclass x tc) = case tc of 
-    Fin -> "fin(" ++ show x ++ ")"
-    Prime -> "prime(" ++ show x ++ ")"
+normConstraint :: Constraint -> Constraint
+normConstraint (Relation r e q) = Relation r (normExpr e) q
 
-symbolSetConsraint :: Constraint -> Set.Set Symbol
-symbolSetConsraint (Relation re e1 e2) = symbolSet e1 <> symbolSet e2
-symbolSetConsraint (Typeclass x _) = Set.singleton x
+normExpr :: Expr -> Expr 
+normExpr = Map.filter (0 /=)
 
-symbolExprEqualityLhs :: Constraint -> [(Symbol, Expr)]
-symbolExprEqualityLhs (Relation re e1 e2) 
-  | [x] <- Set.toList $ symbolSet e1 = [(x, e2)]
-  | otherwise = []
-symbolEqualityLHS _ = []
+addExpr :: Expr -> Expr -> Expr 
+addExpr = Map.unionWith (+)
 
-symbolSetEqualityRhs :: Constraint -> Set.Set Symbol
-symbolSetEqualityRhs (Relation re e1 e2) = symbolSet e2
-symbolSetEqualityRhs _ = mempty
+mapExpr :: (Q -> Q) -> Expr -> Expr
+mapExpr = fmap
 
-negateRe :: Re -> Re
-negateRe Eq = Eq 
-negateRe Geq = Leq
-negateRe Leq = Geq
+negateExpr :: Expr -> Expr 
+negateExpr = fmap negate
+
+isConstantExpr :: Expr -> Bool
+isConstantExpr = (0 ==) . Map.size
+
+isSingletonExpr :: Expr -> Bool
+isSingletonExpr = (1 ==) . Map.size
+
+freshVarExpr :: () -> Expr 
+freshVarExpr _ = Map.singleton (freshVar ()) 1

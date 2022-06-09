@@ -19,10 +19,11 @@ extra-source-files:
 description:         Please see the README on GitHub at <https://github.com/riib11/cryptol-polymorphic-testing#readme>
 
 dependencies:
-- base >= 4.7 && < 5
-- containers
-- mtl
-- list-t
+  - base >= 4.7 && < 5
+  - containers
+  - mtl
+  - list-t
+  - vector-sized
 
 library:
   source-dirs: src
