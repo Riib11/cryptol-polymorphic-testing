@@ -30,6 +30,7 @@ library
       Q
       Solver
       SolverLib
+      Test
       Utils
       Var
   other-modules:

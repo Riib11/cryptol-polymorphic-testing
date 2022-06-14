@@ -26,17 +26,7 @@ showMat rows =
 m ! (i, j) = (m !! i) !! j
 
 modify :: Ix -> (Q -> Q) -> Mat -> Mat
-modify (i, j) f m = modifyList i (modifyList j f) m
-
-modifyList :: Int -> (a -> a) -> [a] -> [a]
-modifyList _ f [] = []
-modifyList 0 f (x:xs) = f x : xs
-modifyList i f (x:xs) = x : modifyList (i-1) f xs
-
-deleteAtList :: Int -> [a] -> [a]
-deleteAtList _ [] = []
-deleteAtList 0 (x:xs) = xs
-deleteAtList i (x:xs) = x : deleteAtList (i-1) xs
+modify (i, j) f m = modifyAtList i (modifyAtList j f) m
 
 -- all the rows have the same length
 wellFormed :: Mat -> Bool
@@ -56,21 +46,21 @@ getRow i rows = rows !! i
 -- subtract `row` from row `i` in `m`
 subRow :: Row -> Int -> Mat -> Mat
 subRow row i rows =
-  modifyList i 
+  modifyAtList i 
     (zipWith (\b a -> a - b) row) 
     rows
 
 -- adds `row` to the ith row in `m`
 addRow :: Row -> Int -> Mat -> Mat
 addRow row i rows =
-  modifyList i 
+  modifyAtList i 
     (zipWith (+) row)
     rows
 
 -- scale by `q` the row `i` in `m`
 scaleRow :: Q -> Int -> Mat -> Mat
 scaleRow q i rows = 
-  modifyList i
+  modifyAtList i
     ((q*) <$>) 
     rows
 

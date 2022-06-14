@@ -2,12 +2,14 @@ module M where
 
 import Control.Monad.Trans
 import Control.Monad
+import qualified Data.List as List
 import qualified ListT as ListT
+import Utils
 
 type M a = ListT.ListT IO a
 
 debugLevel :: Int
-debugLevel = 0
+debugLevel = -1
 
 debug :: Int -> String -> M ()
 debug l msg = 
@@ -17,9 +19,12 @@ debug l msg =
 runM :: M a -> IO [a]
 runM = ListT.toList
 
+runM_unique :: Eq a => M a -> IO [a]
+runM_unique = fmap List.nub . runM
+
 choose :: Show a => [a] -> M a 
 choose xs = do
-  debug 0 $ "choosing from: " ++ show xs
+  debug 0 $ "branching on choice from: " ++ show xs
   ListT.fromFoldable xs
 
 assert :: String -> Bool -> M ()
@@ -27,5 +32,31 @@ assert msg b =
   if b 
     then pure ()
     else do
-      debug 0 $ "rejected; false assertion: " ++ msg
+      debug 0 $ "branch rejected due to false assertion: " ++ msg ++ "\n"
       guard False
+
+reject :: String -> M a
+reject msg = do
+  debug 0 $ "branch rejected: " ++ msg
+  fail ("branch rejected: " ++ msg)
+
+shuffle :: Show a => [a] -> M [a]
+shuffle xs = do
+  debug 0 $ "shuffling: " ++ show xs
+  go xs
+  where
+    go [] = pure []
+    go xs = do
+      i <- ListT.fromFoldable [0..length xs - 1]
+      ((xs!!i) :) <$> go (deleteAtList i xs)
+
+shuffleBy :: [Int] -> [a] -> [a]
+shuffleBy p xs = go p
+  where 
+    go [] = []
+    go (i:p) = (xs!!i) : go p
+
+toFirst :: M a -> IO a
+toFirst m = do
+  (a : _) <- ListT.toList m
+  pure a
