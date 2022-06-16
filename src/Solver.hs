@@ -63,7 +63,7 @@ solve' cons = do
     -- recurse on resulting set of constraints
     solve' cons
 
-solve :: [Constraint] -> M (Map.Map Var VarBound, [Constraint])
+solve :: [Constraint] -> M (Map.Map Var VarBound, Map.Map Var VarValue, [Constraint])
 solve cons = do 
   cons <- solve' cons
   -- enforce integral coefficients
@@ -84,27 +84,14 @@ solve cons = do
   -- cons <- pure $ consSimpleInequalities <> consSimpleEqualities
   -- debug 0 $ "cons after substitution: " ++ showConstraints consSimpleEqualities
 
-  -- fvs <- pure $ freeVarsOfConstraints cons
-  mvb <- pure $ varBoundsFromConstraints cons
+  -- make sure in valid final form
+  mapM_ assertFinalFormedSimpleConstraint cons
 
-  pure (mvb, cons)
+  bnds <- pure $ varBoundsFromConstraints cons
+  vals <- pure $ varValsFromConstraints cons
 
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
+  mapM_ assertGoodVarBound bnds
+  mapM_ assertGoodVarValues vals
+
+  pure (bnds, vals, cons)
 

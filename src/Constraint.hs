@@ -4,6 +4,7 @@ module Constraint where
 
 import qualified Data.List as List
 import qualified Data.Map as Map
+import GHC.Real
 import Q
 import Var
 
@@ -12,10 +13,22 @@ data Constraint
   = ComplexConstraint Re Expr Q
   | SimpleConstraint Var Re Expr Q
   deriving (Eq)
-data Re = Eq | Leq | Geq deriving (Eq)
+data Re = Eq | Leq | Geq deriving (Eq, Ord, Enum, Show)
 type Expr = Map.Map Var Q
 data SimpleEquality = SimpleEquality Var Expr Q deriving (Eq) -- x = e + c
 data ComplexEquality = ComplexEquality Expr Q deriving (Eq) -- e = c
+
+instance Show Constraint where
+  show (ComplexConstraint r e q) =
+    unwords
+      [ "(ComplexConstraint"
+      , show r
+      , "(Map.fromList [" ++ (List.intercalate ", " $ fmap (\(x, q) -> "(Var \"" ++ show x ++ "\", " ++ showQ q ++ ")") $ Map.toList e) ++ "])"
+      , showQ q
+      , ")"
+      ]
+    where
+      showQ (n :% d) = "((" ++ show n ++ "):%(" ++ show d ++ "))"
 
 showConstraint :: Constraint -> String
 showConstraint (ComplexConstraint r e q) = unwords [ showExpr e, showRe r, showQ q ]
@@ -39,7 +52,7 @@ showExpr :: Expr -> String
 showExpr m | Map.null m = "0" 
 showExpr m | otherwise = 
   List.intercalate " + " $ 
-  fmap (\(x, q) -> showQ q ++ show x) $ 
+  fmap (\(x, q) -> (if q /= 1 then showQ q else "") ++ show x) $ 
   Map.toList m
 
 showSimpleEquality :: SimpleEquality -> String 
@@ -48,7 +61,7 @@ showSimpleEquality (SimpleEquality x e q) = show x ++ " = " ++ showExpr e ++ " +
 showComplexEquality :: ComplexEquality -> String
 showComplexEquality (ComplexEquality e q) = showExpr e ++ " = " ++ showQ q
 
--- utilities
+-- utilities 
 
 -- makes into simple constraint if there is only one variable
 normConstraint :: Constraint -> Constraint
@@ -59,7 +72,8 @@ normConstraint (ComplexConstraint r e q) =
   -- can be made into simple constraint if has only one variable
   if Map.size e' == 1 then
     let [(x, a)] = Map.toList e' in
-      SimpleConstraint x r mempty (q/a)
+      -- if divide by a negative, need to flip relation
+      SimpleConstraint x (if a < 0 then negateRe r else r) mempty (q/a)
   else
     ComplexConstraint r e' q
 
@@ -121,6 +135,11 @@ mapExpr = fmap
 
 negateExpr :: Expr -> Expr 
 negateExpr = fmap negate
+
+negateRe :: Re -> Re 
+negateRe Eq = Eq 
+negateRe Leq = Geq 
+negateRe Geq = Leq
 
 isConstantExpr :: Expr -> Bool
 isConstantExpr = (0 ==) . Map.size

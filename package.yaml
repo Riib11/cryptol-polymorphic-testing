@@ -23,7 +23,9 @@ dependencies:
   - containers
   - mtl
   - list-t
-  - vector-sized
+  # - vector-sized
+  - QuickCheck
+  - random
 
 library:
   source-dirs: src

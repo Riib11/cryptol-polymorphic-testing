@@ -220,6 +220,7 @@ assertGoodFormedSimpleEquality eq@(SimpleEquality x e q) =
     ("good-formed simple equality: " ++ showSimpleEquality eq)
     $ foldr1 (||)
         [ all (0 <=) e && q >= 0
+        , Map.null e
         ]
 
 assertGoodFormedSimpleConstraint :: Constraint -> M ()
@@ -228,6 +229,7 @@ assertGoodFormedSimpleConstraint con@(SimpleConstraint x r e q) =
     ("good-formed simple equality: " ++ showConstraint con)
     $ foldr1 (||)
         [ all (0 <=) e && q >= 0
+        , Map.null e
         ]
 assertGoodFormedSimpleConstraint con = 
   assert 
@@ -282,7 +284,6 @@ constrainIntegralCoefficients cons =
       where 
         fold x (i, x') e = substituteExpr x (Map.fromList [(x', toRational i)]) e
 
-  
 pruneUnusedFreshVars :: [Constraint] -> [Constraint]
 pruneUnusedFreshVars cons = filter constrainsUsedVar cons
   where
@@ -296,6 +297,15 @@ pruneUnusedFreshVars cons = filter constrainsUsedVar cons
             filter isFreshVar $ Map.keys e
       )
       cons
+
+assertFinalFormedSimpleConstraint :: Constraint -> M ()
+assertFinalFormedSimpleConstraint con@(SimpleConstraint x r e q) =
+  assert
+    ("final-formed simple constraint: " ++ showConstraint con) $
+    all (\x -> isIntegral x && x >= 0) e && isIntegral q
+assertFinalFormedSimpleConstraint con =
+  reject
+    ("final-formed simple constraint: " ++ showConstraint con)
 
 freeVarsOfConstraints :: [Constraint] -> [Var]
 freeVarsOfConstraints cons = List.nub $ filter (not . (`elem` constrainedVars)) vars
@@ -353,3 +363,34 @@ showVarBounds m =
   List.intercalate ", " $ 
   fmap (\(x, (lo, up)) -> show lo ++ " <= " ++ show x ++ " <= " ++ showUpperBound up) $ 
   Map.toList m
+
+type VarValue = (Map.Map Var Int, Int)
+
+varValsFromConstraints :: [Constraint] -> Map.Map Var VarValue
+varValsFromConstraints cons = Map.fromList (concatMap f cons)
+  where 
+    f (SimpleConstraint x Eq e q) = [(x, (floor <$> e, floor q))]
+    f _ = []
+
+showVarValues :: Map.Map Var VarValue -> String
+showVarValues m =
+    List.intercalate ", " $
+    fmap (\(x, (e, c)) -> show x ++ " = " ++ showExpr (toRational <$> e) ++ if c /= 0 then " + " ++ show c else "") $
+    Map.toList m
+
+assertGoodVarBound :: VarBound -> M ()
+assertGoodVarBound bnd@(lo, Just up) = 
+  assert
+    ("good var bound: " ++ show bnd)
+    (lo <= up)
+assertGoodVarBound bnd@(lo, Nothing) = 
+  assert
+    ("good var bound: " ++ show bnd)
+    True
+
+assertGoodVarValues :: VarValue -> M ()
+assertGoodVarValues val@(e, c) = 
+  assert
+    ("good var value: " ++ show val)
+    (foldl1 (||)
+      [ c >= 0 && all (>= 0) e ])

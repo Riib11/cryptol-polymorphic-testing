@@ -5,11 +5,18 @@ import Control.Monad
 import qualified Data.List as List
 import qualified ListT as ListT
 import Utils
+import qualified Test.QuickCheck.Monadic as QCM
 
 type M a = ListT.ListT IO a
 
 debugLevel :: Int
 debugLevel = -1
+
+debugQCM :: Int -> String -> QCM.PropertyM IO ()
+debugQCM l msg = QCM.run $ debugIO l msg
+
+debugIO :: Int -> String -> IO ()
+debugIO l msg = when (l <= debugLevel) (putStrLn $ msg)
 
 debug :: Int -> String -> M ()
 debug l msg = 

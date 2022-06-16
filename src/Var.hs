@@ -11,7 +11,7 @@ primeVar (FreshVar _) = freshVar ()
 
 instance Show Var where 
   show (Var s) = s
-  show (FreshVar i) = [alphabet !! (i `mod` length alphabet)]
+  show (FreshVar i) = "'" ++ [alphabet !! (i `mod` length alphabet)]
     where 
       alphabet = ['a'..'z']
 
