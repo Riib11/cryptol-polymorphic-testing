@@ -1,55 +1,61 @@
 {-# LANGUAGE PatternSynonyms #-}
+
 module IntInf where 
 
--- data IntInf 
---   = Int Int
---   | Inf Bool -- True: positive, False: negative
---   deriving (Eq)
+data IntInf = Fin Int | Inf Int
 
--- pattern PosInf = Inf True
--- pattern NegInf = Inf False
+pattern PosInf = Inf 1
+pattern NegInf = Inf (-1)
 
--- instance Show IntInf where
---   show (Int x) = show x 
---   show PosInf = "inf"
---   show NegInf = "-inf"
+norm (Inf 0) = Fin 0
+norm (Inf i) = Inf (signum i)
+norm x = x
 
--- instance Num IntInf where
---   Int x + Int y = Int (x + y)
---   --
---   NegInf + PosInf = error "-inf + inf"
---   PosInf + NegInf = error "inf + -inf"
---   --
---   NegInf + _ = NegInf
---   _ + NegInf = NegInf
---   -- 
---   PosInf + _ = PosInf
---   _ + PosInf = PosInf
+rawEq :: IntInf -> IntInf -> Bool 
+rawEq (Fin i) (Fin j) = i == j
+rawEq (Inf i) (Inf j) = i == j
+rawEq _ _ = False
 
---   negate (Int x) = Int (negate x)
---   negate (Inf b) = Inf (not b)
+instance Eq IntInf where
+  x == y = norm x `rawEq` norm y
 
---   Int x * Int y = Int (x * y)
---   Inf 
+instance Show IntInf where 
+  show (Fin i) = show i 
+  show (Inf i) | i <  0 = "-inf"
+  show (Inf i) | i == 0 = "0inf"
+  show (Inf i) | i >  0 = "+inf"
 
+instance Num IntInf where
+  Fin i + Fin j = Fin $ i + j
+  Fin i + Inf j = norm $ Inf j
+  Inf i + Fin j = norm $ Inf j
+  Inf i + Inf j | signum i == signum j = norm $ Inf $ signum i
+  Inf i + Inf j | signum i /= signum j = error $ "undefined: " ++ show (Inf i) ++ " + " ++ show (Inf j)
   
---   NegInf * NegInf = PosInf
+  Fin i * Fin j = Fin $ i * j
+  Fin i * Inf j = norm $ Inf j
+  Inf i * Fin j = norm $ Inf j
+  Inf i * Inf j = norm $ Inf (i * j)
 
---   abs (Int x) = Int (abs x)
---   abs (Inf b) = Inf True
+  negate (Fin i) = Fin (negate i)
+  negate (Inf i) = norm $ Inf (negate i)
 
---   signum (Int x) = Int (signum x)
---   signum (Inf b) = Int (if b then 1 else -1)
+  abs (Fin i) = Fin (abs i)
+  abs (Inf i) = norm $ Inf (abs i)
 
---   fromInteger = Int . fromInteger
+  signum (Fin i) = Fin (signum i)
+  signum (Inf i) = norm $ Inf (signum i)
 
--- instance Ord IntInf where 
---   Int x <= Int y = x <= y
+  fromInteger = Fin . fromInteger  
+
+instance Ord IntInf where
+  Fin i <= Fin j = i <= j
   
---   PosInf <= PosInf = True
---   PosInf <= _ = False 
---   _ <= PosInf = True
+  Fin i <= Inf (-1) = False
+  Fin i <= Inf 0 = i <= 0
+  Fin i <= Inf 1 = True
 
---   NegInf <= _ = True 
---   NegInf <= NegInf = True
---   _ <= NegInf = False
+  Inf (-1) <= Fin j = True
+  Inf 0 <= Fin j = j >= 0
+  Inf 1 <= Fin j = False
+

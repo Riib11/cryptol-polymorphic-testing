@@ -24,15 +24,15 @@ source-repository head
 
 library
   exposed-modules:
-      Checker
-      Constraint
+      Constraints
+      GaussElim
       IntInf
       M
       Mat
       Q
-      Sampler
-      Solver
-      SolverLib
+      RawConstraint
+      Sample
+      Solve
       Test
       Utils
       Var

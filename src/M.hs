@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 module M where
 
 import Control.Monad.Trans
@@ -7,63 +8,50 @@ import qualified ListT as ListT
 import Utils
 import qualified Test.QuickCheck.Monadic as QCM
 
-type M a = ListT.ListT IO a
+-- OLD: type M a = ListT.ListT IO a
+type M a = IO a
 
-debugLevel :: Int
-debugLevel = -1
-
-debugQCM :: Int -> String -> QCM.PropertyM IO ()
-debugQCM l msg = QCM.run $ debugIO l msg
-
-debugIO :: Int -> String -> IO ()
-debugIO l msg = when (l <= debugLevel) (putStrLn $ msg)
-
-debug :: Int -> String -> M ()
-debug l msg = 
-  when (l <= debugLevel)
-    (lift . putStrLn $ msg)
-
-runM :: M a -> IO [a]
-runM = ListT.toList
-
-runM_unique :: Eq a => M a -> IO [a]
-runM_unique = fmap List.nub . runM
-
-choose :: Show a => [a] -> M a 
-choose xs = do
-  debug 0 $ "branching on choice from: " ++ show xs
-  ListT.fromFoldable xs
+runM :: M a -> IO a
+-- OLD: runM = ListT.toList
+runM = id
 
 assert :: String -> Bool -> M ()
-assert msg b =
-  if b 
-    then pure ()
-    else do
-      debug 0 $ "branch rejected due to false assertion: " ++ msg ++ "\n"
-      guard False
+assert msg cnd = do
+  debugM 1 $ "assert: " ++ msg
+  when (not cnd) do
+    debugM 0 $ "failed assertion: " ++ msg
+    fail "assertion failed"
 
-reject :: String -> M a
-reject msg = do
-  debug 0 $ "branch rejected: " ++ msg
-  fail ("branch rejected: " ++ msg)
+choose :: Show a => String -> [a] -> M a
+choose msg xs = do 
+  debugM 1 $ "choose: " ++ msg
+  debugM 1 $ "choices: " ++ show xs
+  -- OLD: x <- ListT.fromFoldable xs
+  if null xs then
+    fail "no choices"
+  else do
+    let x = xs!!0
+    debugM 1 $ "==> chosen: " ++ show x
+    pure x
 
-shuffle :: Show a => [a] -> M [a]
-shuffle xs = do
-  debug 0 $ "shuffling: " ++ show xs
-  go xs
-  where
-    go [] = pure []
-    go xs = do
-      i <- ListT.fromFoldable [0..length xs - 1]
-      ((xs!!i) :) <$> go (deleteAtList i xs)
+chooseST :: Show a => String -> (a -> Bool) -> [a] -> M a
+chooseST msg cnd xs = do
+  debugM 1 $ "choose: " ++ msg
+  xs <- pure $ filter cnd xs
+  debugM 1 $ "choices: " ++ show xs
+  -- OLD: xs <- pure $ filter cnd xs
+  if null xs then
+    fail "no choices"
+  else do
+    let x = xs!!0
+    debugM 1 $ "==> chosen: " ++ show x
+    pure x
 
-shuffleBy :: [Int] -> [a] -> [a]
-shuffleBy p xs = go p
-  where 
-    go [] = []
-    go (i:p) = (xs!!i) : go p
+debugLevel = 1 :: Int
 
-toFirst :: M a -> IO a
-toFirst m = do
-  (a : _) <- ListT.toList m
-  pure a
+debugIO :: Int -> String -> IO ()
+debugIO l msg = when (l <= debugLevel) (putStrLn msg)
+
+debugM :: Int -> String -> M ()
+-- OLD: debugM l msg = lift (debugIO l msg)
+debugM l msg = debugIO l msg

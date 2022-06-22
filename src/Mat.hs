@@ -1,98 +1,86 @@
+{-# LANGUAGE DeriveFunctor #-}
+
 module Mat where
 
 import qualified Data.List as List
 import Q
 import Utils
 
-type Mat = [Row]
-type Row = [Q]
-type Ix = (Int,Int)
+data MatF r = Mat [r] deriving (Eq, Functor, Show)
+data RowF a = Row [a] a deriving (Eq, Functor, Show)
 
-showRow :: Row -> String 
-showRow r = "[ " ++ List.intercalate ", " (showQ <$> r) ++ " ]"
+type Mat = MatF Row
+type Row = RowF Q
 
-showIx :: Ix -> String
-showIx (i,j) = "m" ++ show (i,j)
+-- display
 
-showMat rows = 
-  "( " ++ List.intercalate "\n  " [ unwords (pad . showQ <$> row) | row <- rows ] ++ " )"
-  where 
-    lens = length . showQ <$> concat rows
-    max_len = foldr max 0 lens
-    pad str = str ++ replicate (max 0 (max_len - length str)) ' '
+displayMat :: Mat -> String
+displayMat (Mat rows) | null rows = "[]"
+displayMat (Mat rows) | otherwise = unlines $ displayRow <$> rows
 
--- ith row, jth col
-(!) :: Mat -> Ix -> Q
-m ! (i, j) = (m !! i) !! j
+displayRow :: Row -> String
+displayRow (Row xs c) = displayRowVars xs ++ " = " ++ displayQ c
 
-modify :: Ix -> (Q -> Q) -> Mat -> Mat
-modify (i, j) f m = modifyAtList i (modifyAtList j f) m
+displayRowVars :: [Q] -> String
+displayRowVars xs = List.intercalate " + " 
+  ((\(x, j) -> displayQ x ++ displayVar j) 
+    <$> zip xs [0..])
 
--- all the rows have the same length
-wellFormed :: Mat -> Bool
-wellFormed [] = True
-wellFormed (row : rows) = all ((length row ==) . length) rows
-
-nRows, nCols :: Mat -> Int 
-nRows rows = length rows 
-nCols [] = 0
-nCols (row:_) = length row
+displayVar :: Int -> String 
+displayVar j = "x" ++ show j
 
 -- utilities
 
+nRows, nCols :: Mat -> Int 
+nRows (Mat rows) = length rows 
+nCols (Mat []) = 0
+nCols (Mat (Row xs c:_)) = length xs
+
+getEntry :: Int -> Int -> Mat -> Q
+getEntry i j mat@(Mat rows) = let Row xs c = getRow i mat in xs!!j
+
+rowsMat :: Mat -> [Row]
+rowsMat (Mat rows) = rows
+
 getRow :: Int -> Mat -> Row
-getRow i rows = rows !! i
+getRow i (Mat rows) = rows!!i
 
--- subtract `row` from row `i` in `m`
-subRow :: Row -> Int -> Mat -> Mat
-subRow row i rows =
-  modifyAtList i 
-    (zipWith (\b a -> a - b) row) 
-    rows
+countLeading0sRows :: Mat -> [Int]
+countLeading0sRows (Mat rows) = fmap countLeading0sRow rows 
 
--- adds `row` to the ith row in `m`
-addRow :: Row -> Int -> Mat -> Mat
-addRow row i rows =
-  modifyAtList i 
-    (zipWith (+) row)
-    rows
+countLeading0sRow :: Row -> Int
+countLeading0sRow (Row xs c) = length . takeWhile (== 0) $ xs
 
--- scale by `q` the row `i` in `m`
-scaleRow :: Q -> Int -> Mat -> Mat
-scaleRow q i rows = 
-  modifyAtList i
-    ((q*) <$>) 
-    rows
+isSolvable :: Mat -> Bool
+isSolvable (Mat rows) = all f rows
+  where 
+    f (Row xs c) = (all (0 ==) xs) ==> (c == 0)
 
--- moves the ith row to the bottom
-moveRowToBot :: Int -> Mat -> Mat
-moveRowToBot i rows = 
-  let row = rows !! i in
-    deleteAtList i rows ++ [row]
+scaleRowMat :: Int -> Q -> Mat -> Mat 
+scaleRowMat i x (Mat rows) = Mat $ modifyAtList i (fmap (x *)) rows
 
-deleteRow :: Int -> Mat -> Mat
-deleteRow i rows = deleteAtList i rows
+subRowMat :: Int -> Row -> Mat -> Mat
+subRowMat i row (Mat rows) = Mat $ modifyAtList i (`subRow` row) rows
 
-appendRow :: Mat -> Row -> Mat
-appendRow rows row = rows <> [row]
+subRow :: Row -> Row -> Row
+subRow (Row xs1 c1) (Row xs2 c2) = Row (zipWith (-) xs1 xs2) (c1 - c2)
 
-lastRow :: Mat -> Row
-lastRow rows = rows !! (length rows - 1)
+swapRowsMat :: Int -> Int -> Mat -> Mat
+swapRowsMat i i' (Mat rows) = Mat $ swapAtList i i' rows
 
-initRows :: Mat -> [Row]
-initRows rows = init rows
+pullRowToHeadMat :: Int -> Mat -> Mat 
+pullRowToHeadMat i (Mat rows) = Mat $ pullToHead i rows
 
--- r1 - r2
-subList :: Row -> Row -> Row
-subList r1 r2 = zipWith (-) r1 r2
+-- adds another column without affecting indices of other columns
+-- this new column corresponds to a fresh var
+addEmptyCol :: Mat -> Mat
+addEmptyCol (Mat rows) = Mat $ (\(Row xs c) -> Row (xs <> [0]) c) <$> rows
 
-scaleList :: Q -> Row -> Row
-scaleList q r = fmap (q*) r
+addRow :: Row -> Mat -> Mat
+addRow row (Mat rows) = Mat (row : rows)
 
--- negates all coefficients but doesn't negate constant
-negateVars :: Row -> Row
-negateVars qs = (negate <$> init qs) <> [last qs]
+getCol :: Int -> Mat -> [Q]
+getCol j (Mat rows) = [ xs!!j | Row xs _ <- rows ]
 
--- -- zeros out all 
--- zeroExcept :: Int -> Row -> Row
--- zeroExcept 
+nullMat :: Mat -> Bool 
+nullMat (Mat rows) = null rows
