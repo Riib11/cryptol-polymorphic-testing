@@ -21,7 +21,7 @@ assert msg cnd = do
   debug 1 $ "assert: " ++ msg
   when (not cnd) do
     debug 0 $ "failed assertion: " ++ msg
-    Except.throwError "assertion failed"
+    throwError "assertion failed"
 
 choose :: Show a => String -> [a] -> M a
 choose msg xs = do 
@@ -29,7 +29,7 @@ choose msg xs = do
   debug 1 $ "choices: " ++ show xs
   -- OLD: x <- ListT.fromFoldable xs
   if null xs then
-    Except.throwError "no choices"
+    throwError "no choices"
   else do
     let x = xs!!0
     debug 1 $ "==> chosen: " ++ show x
@@ -42,13 +42,14 @@ chooseST msg cnd xs = do
   debug 1 $ "choices: " ++ show xs
   -- OLD: xs <- pure $ filter cnd xs
   if null xs then
-    Except.throwError "no choices"
+    throwError "no choices"
   else do
     let x = xs!!0
     debug 1 $ "==> chosen: " ++ show x
     pure x
 
-debugLevel = 1 :: Int
+-- debugLevel = -1 :: Int
+debugLevel = 0 :: Int
 
 debugIO :: Int -> String -> IO ()
 debugIO l msg = when (l <= debugLevel) (putStrLn msg)
@@ -56,3 +57,6 @@ debugIO l msg = when (l <= debugLevel) (putStrLn msg)
 debug :: Int -> String -> M ()
 -- OLD: debug l msg = lift (debugIO l msg)
 debug l msg = lift $ debugIO l msg
+
+throwError :: String -> M a 
+throwError = Except.throwError

@@ -10,6 +10,12 @@ mapInf :: (Eq b, Num b) => (a -> b) -> (Inf a -> Inf b)
 mapInf f (Fin a) = Fin (f a)
 mapInf f (Inf a) = norm $ Inf (f a) 
 
+isFin, isInf :: Inf a -> Bool 
+isFin (Fin _) = True
+isFin _ = False
+isInf (Inf _) = True
+isInf _ = False
+
 type InfInt = Inf Int
 type InfQ = Inf Q
 
@@ -34,16 +40,21 @@ instance (Show a, Ord a, Num a) => Show (Inf a) where
   show (Inf i) | i == 0 = "0inf"
   show (Inf i) | i >  0 = "+inf"
 
+displayInfQ :: InfQ -> String
+displayInfQ (Fin q) = displayQ q
+displayInfQ x = show x
+
+
 instance (Eq a, Ord a, Num a, Show a) => Num (Inf a) where
   Fin i + Fin j = Fin $ i + j
   Fin i + Inf j = norm $ Inf j
-  Inf i + Fin j = norm $ Inf j
+  Inf i + Fin j = norm $ Inf i
   Inf i + Inf j | signum i == signum j = norm $ Inf $ signum i
   Inf i + Inf j | signum i /= signum j = error $ "undefined: " ++ show (Inf i) ++ " + " ++ show (Inf j)
   
   Fin i * Fin j = Fin $ i * j
-  Fin i * Inf j = norm $ Inf j
-  Inf i * Fin j = norm $ Inf j
+  Fin i * Inf j = norm $ Inf (i * j)
+  Inf i * Fin j = norm $ Inf (i * j)
   Inf i * Inf j = norm $ Inf (i * j)
 
   negate (Fin i) = Fin (negate i)

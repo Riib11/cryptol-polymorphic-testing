@@ -8,20 +8,22 @@ import Q
 import Mat
 import Inf
 import Utils
-import GaussElim
+
 
 data Constraints = Constraints 
   { equs :: [Equ]
   , leqs :: [Leq]
   , cones :: [Cone]
   , cocones :: [Cocone]
+  , fins :: [Int]
+  , primes :: [Int]
   , elimVars :: [Int] -- eliminated variables
   , nVars :: Int
   }
   deriving (Show)
 
 data Equ = Equ Int (Expr Q) deriving (Show) -- v = a1*x1 + ... + aN*xN + c
-data Leq = Leq Int Q deriving (Show) -- xj <= c
+data Leq = Leq Int (Expr Q) deriving (Show) -- xj <= a1*x1 + ... + aN*xN + c
 data Geq = Geq Int Q deriving (Show) -- c <= xj
 data Cone = Cone [Q] Q deriving (Show) -- a1*x1 + ... + aN*xN <= c
 data Cocone = Cocone Q [Q] deriving (Show) -- c <= a1*x1 + ... + aN*xN
@@ -37,6 +39,8 @@ displayConstraints cons =
     , "  leqs     = " ++ indent (foldMap ("\n" ++) . fmap displayLeq $ leqs cons)
     , "  cons     = " ++ "TODO"
     , "  cocons   = " ++ "TODO"
+    , "  fins     = " ++ show (fins cons)
+    , "  primes   = " ++ show (primes cons)
     , "  elimVars = " ++ show (elimVars cons)
     , "  nVars    = " ++ show (nVars cons)
     ]
@@ -44,7 +48,7 @@ displayConstraints cons =
     indent = List.intercalate "\n" . fmap ("    " ++) . lines
 
 displayEqu (Equ j e) = unwords ["(", displayVar j, "=", displayExprQ e, ")"]
-displayLeq (Leq j c) = unwords ["(", displayVar j, "<=", displayQ c, ")"]
+displayLeq (Leq j c) = unwords ["(", displayVar j, "<=", displayExprQ c, ")"]
 displayGeq (Geq j c) = unwords ["(", displayVar j, ">=", displayQ c, ")"]
 displayCone (Cone xs c) = unwords ["(", displayRowVars xs, "<=", displayQ c, ")"]
 displayCocone (Cocone c xs) = unwords ["(", displayQ c, "<=", displayRowVars xs, ")"]
@@ -58,6 +62,8 @@ defaultConstraints nVars = Constraints
   , leqs = mempty
   , cones = mempty
   , cocones = mempty 
+  , fins = mempty 
+  , primes = mempty 
   , elimVars = mempty
   , nVars = nVars
   }
@@ -99,3 +105,4 @@ leqToRow = undefined
 
 geqToRow :: (Int, Q) -> Row
 geqToRow = undefined
+

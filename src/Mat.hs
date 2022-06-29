@@ -77,7 +77,7 @@ addEmptyCol :: Mat -> Mat
 addEmptyCol (Mat rows) = Mat $ (\(Row xs c) -> Row (xs <> [0]) c) <$> rows
 
 addRow :: Row -> Mat -> Mat
-addRow row (Mat rows) = Mat (row : rows)
+addRow (Row xs c) mat@(Mat rows) = Mat (Row (padRight (nCols mat) 0 xs) c : rows)
 
 getCol :: Int -> Mat -> [Q]
 getCol j (Mat rows) = [ xs!!j | Row xs _ <- rows ]

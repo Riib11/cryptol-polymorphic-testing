@@ -31,3 +31,7 @@ concatMapWithKey f = Map.foldrWithKey (\k a as -> f k a <> as) []
 
 (==>) :: Bool -> Bool -> Bool
 p ==> q = if p then q else True
+
+padRight :: Int -> a -> [a] -> [a]
+padRight n a xs | length xs >= n = xs
+padRight n a xs | length xs <  n = padRight n a (xs <> [a])

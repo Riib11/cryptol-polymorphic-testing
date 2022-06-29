@@ -21,7 +21,9 @@ data Sample
   deriving (Show)
 
 data UpperBound 
-  = UpperBound InfInt deriving (Show)
+  = UpperBoundConst (Maybe InfInt) 
+  | UpperBoundExpr (Expr InfInt)
+  deriving (Show)
 
 displaySampling :: [Sample] -> String
 displaySampling sampling = 
@@ -35,7 +37,8 @@ displaySample (SampleRange vs) = "in " ++ show vs
 displaySample (SampleExpr e  ) = ":= " ++ displayExprInfInt e
 
 displayUpperBound :: UpperBound -> String
-displayUpperBound (UpperBound up) = "<= " ++ show up
+displayUpperBound (UpperBoundConst x) = "<= " ++ show x
+displayUpperBound (UpperBoundExpr e) = "<= " ++ show e
 
 displayExprInfInt :: Expr InfInt -> String
 displayExprInfInt (Expr xs c) = unwords [displayRowVarsInfInt xs, "+", show c]
@@ -70,27 +73,39 @@ sampling cons = do
 
 -- utilities
 
-defaultUpperBound = UpperBound PosInf
+defaultFinUpperBound = UpperBound Nothing
+defaultInfUpperBound = UpperBound (Just PosInf)
 
 sampleVar :: UpperBound -> [InfInt]
-sampleVar (UpperBound (Fin 0)) = [0]
-sampleVar (UpperBound (Fin up)) = [0, Fin up]
-sampleVar (UpperBound PosInf) = [0, PosInf]
+sampleVar (UpperBound (Just (Fin 0))) = [0]
+sampleVar (UpperBound (Just (Fin up))) = [0, Fin up]
+sampleVar (UpperBound (Just PosInf)) = [0, PosInf]
+sampleVar (UpperBound Nothing) = [0, 4]
+-- sampleVar (UpperBound PosInf) = [0, PosInf]
 
 collectUpperBounds :: Constraints -> [UpperBound]
 collectUpperBounds cons = 
   flip (foldr foldLeqs ) (leqs cons) .
   flip (foldr foldCones) (cones cons) $
-  [ if j `elem` elimVars cons 
-      then UpperBound (Fin 0)
-      else defaultUpperBound 
+  [ if j `elem` elimVars cons then 
+      UpperBound (Just $ Fin 0)
+    else if j `elem` fins cons || j `elem` primes cons then
+      defaultFinUpperBound
+    else
+        defaultInfUpperBound
   | j <- [0..nVars cons - 1] ]
   where 
-    foldLeqs  (Leq j c)   = modifyAtList j (\(UpperBound up) -> UpperBound (up `min` fromInteger (ceiling c)))
+    foldLeqs (Leq j c) = modifyAtList j
+      \case
+        UpperBound (Just up) -> UpperBound $ Just $ up `min` fromInteger (floor c)
+        UpperBound Nothing   -> UpperBound $ Just $ fromInteger (floor c)
+
     foldCones (Cone xs c) = foldr (.) id $
       (\j x ->
         if x /= 0 then
-          modifyAtList j \(UpperBound up) -> UpperBound (up `min` fromInteger (floor c))
+          modifyAtList j \case
+            UpperBound (Just up) -> UpperBound $ Just $ up `min` fromInteger (floor c)
+            UpperBound Nothing   -> UpperBound $ Just $ fromInteger (floor c)
         else
           id :: [UpperBound] -> [UpperBound]
       ) `mapWithIndex` xs
