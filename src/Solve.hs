@@ -63,23 +63,6 @@ extractConstraints mat@(Mat rows) cons = do
 
     extractEqu :: Row -> M (Maybe (Constraints -> Constraints))
     extractEqu row@(Row xs c) = do
-      -- OLD: required only negatives to move over the RHS
-      -- -- exactly one unit coef, all other neg coefs, pos const
-      -- case List.findIndex (1 ==) xs of
-      --   Just j -> do
-      --     debug 0 $ "all (\\(j', x) -> x <= 0 || j == j') (zip [0..] xs) = " ++ show (all (\(j', x) -> x <= 0 || j == j') (zip [0..] xs))
-      --     debug 0 $ "0 <= c = " ++ show (0 <= c) 
-      --     if all (\(j', x) -> x <= 0 || j == j') (zip [0..] xs) && 0 <= c then do
-      --       let
-      --         f :: (Q, Int) -> Q
-      --         f (_, j') | j' == j   = 0
-      --         f (x, j') | otherwise = -x
-      --         equ = Equ j (Expr (f <$> zip xs [0..]) c)
-      --       pure $ Just \cons -> cons { equs = equ : equs cons }
-      --     else
-      --       pure Nothing
-      --   Nothing -> pure Nothing
-      -- NEW: can handle negatives on RHS when sampling
       case List.findIndex (1 ==) xs of 
         Just j -> do
           let
