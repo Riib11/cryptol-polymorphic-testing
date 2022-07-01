@@ -48,8 +48,8 @@ chooseST msg cnd xs = do
     debug 1 $ "==> chosen: " ++ show x
     pure x
 
--- debugLevel = -1 :: Int
 debugLevel = 0 :: Int
+-- debugLevel = 1 :: Int
 
 debugIO :: Int -> String -> IO ()
 debugIO l msg = when (l <= debugLevel) (putStrLn msg)

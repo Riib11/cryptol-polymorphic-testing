@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveFunctor #-}
+
 module Constraints where
 
 import Control.Monad
@@ -9,12 +11,9 @@ import Mat
 import Inf
 import Utils
 
-
 data Constraints = Constraints 
   { equs :: [Equ]
   , leqs :: [Leq]
-  , cones :: [Cone]
-  , cocones :: [Cocone]
   , fins :: [Int]
   , primes :: [Int]
   , elimVars :: [Int] -- eliminated variables
@@ -25,20 +24,16 @@ data Constraints = Constraints
 data Equ = Equ Int (Expr Q) deriving (Show) -- v = a1*x1 + ... + aN*xN + c
 data Leq = Leq Int (Expr Q) deriving (Show) -- xj <= a1*x1 + ... + aN*xN + c
 data Geq = Geq Int Q deriving (Show) -- c <= xj
-data Cone = Cone [Q] Q deriving (Show) -- a1*x1 + ... + aN*xN <= c
-data Cocone = Cocone Q [Q] deriving (Show) -- c <= a1*x1 + ... + aN*xN
 
-data Expr a = Expr [a] a deriving (Show) -- a1*x1 + ... + aN*xN + c
+data Expr a = Expr [a] a deriving (Show, Functor) -- a1*x1 + ... + aN*xN + c
 
 -- display
 
 displayConstraints cons =
-  List.intercalate "\n"
+  unlines
     [ "constraints:"
     , "  equs     = " ++ indent (foldMap ("\n" ++) . fmap displayEqu $ equs cons)
     , "  leqs     = " ++ indent (foldMap ("\n" ++) . fmap displayLeq $ leqs cons)
-    , "  cons     = " ++ "TODO"
-    , "  cocons   = " ++ "TODO"
     , "  fins     = " ++ show (fins cons)
     , "  primes   = " ++ show (primes cons)
     , "  elimVars = " ++ show (elimVars cons)
@@ -50,9 +45,9 @@ displayConstraints cons =
 displayEqu (Equ j e) = unwords ["(", displayVar j, "=", displayExprQ e, ")"]
 displayLeq (Leq j c) = unwords ["(", displayVar j, "<=", displayExprQ c, ")"]
 displayGeq (Geq j c) = unwords ["(", displayVar j, ">=", displayQ c, ")"]
-displayCone (Cone xs c) = unwords ["(", displayRowVars xs, "<=", displayQ c, ")"]
-displayCocone (Cocone c xs) = unwords ["(", displayQ c, "<=", displayRowVars xs, ")"]
 displayExprQ (Expr xs c) = unwords [displayRowVars xs, "+", displayQ c]
+displayExprInfQ (Expr xs c) = unwords [List.intercalate " + " ((\(x, j) -> displayInfQ x ++ displayVar j)  <$> zip xs [0..]), "+", displayInfQ c]
+displayExprInfInt (Expr xs c) = unwords [List.intercalate " + " ((\(x, j) -> displayInfInt x ++ displayVar j)  <$> zip xs [0..]), "+", displayInfInt c]
 
 -- utilities
 
@@ -60,8 +55,6 @@ defaultConstraints :: Int -> Constraints
 defaultConstraints nVars = Constraints
   { equs = mempty
   , leqs = mempty
-  , cones = mempty
-  , cocones = mempty 
   , fins = mempty 
   , primes = mempty 
   , elimVars = mempty
@@ -81,12 +74,21 @@ getEqu j cons =
   map (\equ@(Equ j' _) -> guard (j == j') >> Just equ) $
   equs cons
 
--- evalExpr
-evalExpr :: Expr InfInt -> [InfInt] -> InfInt
+-- Expr utils
+
+evalExpr :: Num a => Expr a -> [a] -> a
 evalExpr (Expr xs c) vs = sum (zipWith (*) xs vs) + c
 
 traverseExpr :: (Traversable t, Applicative t) => (a -> t b) -> Expr a -> t (Expr b)
 traverseExpr k (Expr xs c) = Expr <$> traverse k xs <*> k c
+
+toConstant :: (Eq a, Num a) => Expr a -> Maybe a
+toConstant (Expr xs c) = do
+  guard (all (0 ==) xs)
+  pure c
+
+fromConstant :: Num a => Int -> a -> Expr a
+fromConstant n c = Expr (replicate n 0) c
 
 -- OLD
 -- assertGoodFormed :: Constraints -> M ()

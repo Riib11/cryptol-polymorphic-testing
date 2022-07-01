@@ -20,7 +20,7 @@ import Test.QuickCheck.Monadic as QCM
 -- mapM_ putStrLn =<< (fmap (unlines . fmap show) <$> sample' (genRawConstraints 3 2))
 
 check :: IO ()
-check = quickCheck (checkSolveSample 3 2)
+check = quickCheck (checkSolveSample 4 3)
 -- check = quickCheck (checkSolveSample 3 1)
 -- check = quickCheck $ once $ monadicIO $
 --   checkSolveRawConstraints 3 
@@ -36,25 +36,36 @@ checkSolveSample nVars nCons = monadicIO $
 
 checkSolveRawConstraints :: Int -> [RC.RawConstraint] -> PropertyM IO Bool
 checkSolveRawConstraints nVars rcs = do
-  run $ debugIO 0 $ "============================================"
+  run $ debugIO 0 $ "============================================\n"
   res <- run $ runM do
     debug 0 $ "raw constraints:\n" ++ unlines (show <$> rcs)
 
-    cons <- solveRawConstraints nVars rcs
-    debug 0 $ "solved constraints:\n" ++ displayConstraints cons
-    
-    smpl <- sampling cons
-    debug 0 $ "sampling cons:\n" ++ displaySampling smpl ++ "\n"
-    
-    vals <- pure $ evalSampling smpl
-    debug 0 $ "evalSampling smpl:\n" ++ unlines (show <$> vals)
+    mb_cons <- solveRawConstraints nVars rcs
+    case mb_cons of
+      Just cons -> do
+        debug 0 $ "solved constraints:\n" ++ displayConstraints cons
+        
+        smpl <- sampleConstraints cons
+        debug 0 $ "sampling cons:\n" ++ displaySampling smpl ++ "\n"
+        
+        vals <- evalSampling smpl
+        -- debug 0 $ "evalSampling smpl:\n" ++ unlines (List.intercalate ", " . fmap displayInfQ <$> vals)
 
-    pure vals
+        case sequence (fmap sequence (fmap (fmap toInfInt) vals)) of
+          Just vals -> pure $ Just vals
+          Nothing -> throwError "Evaluating sampling results in non-integral values."
+      Nothing -> do
+        debug (-1) $ "unable to extract constraints"
+        pure Nothing
+
   case res of
-    Right asgns -> do
+    Right Nothing -> 
+      pure True
+    Right (Just asgns) -> do
       tests <- run $ mapM
         (\asgn -> RC.checkAll asgn rcs)
         asgns
+      run $ debugIO 0 ""
       pure $ and tests
     Left msg -> do
       run $ debugIO 0 $ "throwError: " ++ msg

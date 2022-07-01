@@ -13,7 +13,7 @@ import GaussElim
 import qualified RawConstraint as RC
 import Constraints
 
-solve :: Mat -> Constraints -> M Constraints 
+solve :: Mat -> Constraints -> M (Maybe Constraints)
 solve mat cons = do 
   debug 1 $ "mat =\n" ++ displayMat mat ++ "\n"
   -- gaussian elimination
@@ -22,36 +22,30 @@ solve mat cons = do
   -- eliminate denomenators
   mat <- elimDenoms mat
   debug 1 $ "elimDenoms mat =\n" ++ displayMat mat ++ "\n"
-  -- -- extract constraints
-  cons <- extractConstraints mat cons
+  -- extract constraints
+  mb_cons <- extractConstraints mat cons
   -- debug 1 $ "extractConstraints mat =\n" ++ displayConstraints cons ++ "\n"
   -- 
-  pure cons
+  pure mb_cons
 
-extractConstraints :: Mat -> Constraints -> M Constraints
+extractConstraints :: Mat -> Constraints -> M (Maybe Constraints)
 extractConstraints mat@(Mat rows) cons = do
   -- debug 0 $ "============"
   -- debug 0 $ "rows =\n" ++ unlines (displayRow <$> rows)
-  foldM (flip fold) cons rows
+  foldM (flip fold) (Just cons) rows
   where 
-    fold :: Row -> Constraints -> M Constraints 
-    fold row cons = do
-      debug 0 $ "============"
-      debug 0 $ "row = " ++ displayRow row
+    fold :: Row -> Maybe Constraints -> M (Maybe Constraints) 
+    fold row Nothing = pure Nothing
+    fold row (Just cons) = do
+      debug 1 $ "============"
+      debug 1 $ "row = " ++ displayRow row
       mb_cons <-
         fmap (foldr1 (<|>)) $
         sequence
-          [ 
-            extractLeq row <*|> cons
+          [ extractLeq row <*|> cons
           , extractEqu row <*|> cons
-          --   extractLeq row >>|= \leq -> pure cons { leqs = leq : leqs cons }
-          -- , extractEqu row >>|= \equ -> pure cons { equs = equ : equs cons }
-          -- TODO: extractCone
-          -- TODO: extractCocone
           ]
-      case mb_cons of
-        Just cons -> pure cons
-        Nothing -> throwError $ "Unable to extract constraint from row:\n  " ++ displayRow row ++ "\n\n" ++ show row
+      pure mb_cons
     
     (<*|>) :: M (Maybe (a -> b)) -> a -> M (Maybe b)
     mf <*|> a = do
@@ -69,27 +63,37 @@ extractConstraints mat@(Mat rows) cons = do
 
     extractEqu :: Row -> M (Maybe (Constraints -> Constraints))
     extractEqu row@(Row xs c) = do
-      -- exactly one unit coef, all other neg coefs, pos const
-      case List.findIndex (1 ==) xs of
+      -- OLD: required only negatives to move over the RHS
+      -- -- exactly one unit coef, all other neg coefs, pos const
+      -- case List.findIndex (1 ==) xs of
+      --   Just j -> do
+      --     debug 0 $ "all (\\(j', x) -> x <= 0 || j == j') (zip [0..] xs) = " ++ show (all (\(j', x) -> x <= 0 || j == j') (zip [0..] xs))
+      --     debug 0 $ "0 <= c = " ++ show (0 <= c) 
+      --     if all (\(j', x) -> x <= 0 || j == j') (zip [0..] xs) && 0 <= c then do
+      --       let
+      --         f :: (Q, Int) -> Q
+      --         f (_, j') | j' == j   = 0
+      --         f (x, j') | otherwise = -x
+      --         equ = Equ j (Expr (f <$> zip xs [0..]) c)
+      --       pure $ Just \cons -> cons { equs = equ : equs cons }
+      --     else
+      --       pure Nothing
+      --   Nothing -> pure Nothing
+      -- NEW: can handle negatives on RHS when sampling
+      case List.findIndex (1 ==) xs of 
         Just j -> do
-          debug 0 $ "all (\\(j', x) -> x <= 0 || j == j') (zip [0..] xs) = " ++ show (all (\(j', x) -> x <= 0 || j == j') (zip [0..] xs))
-          debug 0 $ "0 <= c = " ++ show (0 <= c) 
-          if all (\(j', x) -> x <= 0 || j == j') (zip [0..] xs) && 0 <= c then do
-            let
-              f :: (Q, Int) -> Q
-              f (_, j') | j' == j   = 0
-              f (x, j') | otherwise = -x
-              equ = Equ j (Expr (f <$> zip xs [0..]) c)
-            pure $ Just \cons -> cons { equs = equ : equs cons }
-          else
-            pure Nothing
+          let
+            f j' _ | j' == j   = 0
+            f j' x | otherwise = -x
+            equ = Equ j (Expr (mapWithIndex f xs) c)
+          pure $ Just \cons -> cons { equs = equ : equs cons } 
         Nothing -> pure Nothing
 
     extractLeq :: Row -> M (Maybe (Constraints -> Constraints))
     extractLeq (Row xs c) = do
       -- exactly 2 pos coefs, pos const
       let posVars = List.findIndices (0 <) xs
-      debug 0 $ "posVars = " ++ show posVars
+      debug 1 $ "posVars = " ++ show posVars
 
       case posVars of
         [j1, j2] ->
@@ -115,37 +119,13 @@ extractConstraints mat@(Mat rows) cons = do
               pure Nothing -- j2 cannot be eliminated
           else
             pure Nothing
+        _ -> pure Nothing
 
-      -- if length posVars == 2 && length negVars <= 1 && 0 <= c then do
-      --   case posVars of
-      --     [j1, j2] -> 
-      --       -- the first positif value is 
-      --       -- this row has the only nonzero value in column j2
-      --       if xs!!j1 == 1 then 
-      --         case negVars of 
-      --           [] -> do
-      --             let leq = Leq j1 c
-      --             pure $ Just \cons -> cons { leqs = leq : leqs cons }
-      --           [j3] ->
-      --             -- TODO: make sure that j3 is not used in any other row
-      --             -- TODO eliminate j3 and turn into a Leq
-      --       else
-      --         pure Nothing
-      --     _ -> pure Nothing
-      -- else 
-      --   pure Nothing
-
-    extractCone :: Row -> M (Maybe Cone)
-    extractCone = undefined -- TODO
-
-    extractCocone :: Row -> M (Maybe Cocone)
-    extractCocone = undefined -- TODO
-
-solveRawConstraints :: Int -> [RC.RawConstraint] -> M Constraints
+solveRawConstraints :: Int -> [RC.RawConstraint] -> M (Maybe Constraints)
 solveRawConstraints nVars rcs = do
-  let (mat, cons) = foldr (.) id (fromRawConstraint <$> rcs) (Mat [], defaultConstraints nVars)
-  cons <- solve mat cons
-  pure cons
+  (mat, cons) <- pure $ foldr (.) id (fromRawConstraint <$> rcs) (Mat [], defaultConstraints nVars)
+  mb_cons <- solve mat cons
+  pure mb_cons
   where 
     fromRawConstraint :: RC.RawConstraint -> (Mat, Constraints) -> (Mat, Constraints)
     fromRawConstraint (RC.Relation RC.Equ (RC.Exp xs1 c1) (RC.Exp xs2 c2)) (mat, cons) =
@@ -154,15 +134,15 @@ solveRawConstraints nVars rcs = do
       ( addRow (toRational <$> Row (zipWith (-) xs1 xs2 <> [1]) (c2 - c1)) .
         addEmptyCol $
         mat
-      , cons)
+      , cons { nVars = nVars + 1 } )
     fromRawConstraint (RC.Relation RC.Geq (RC.Exp xs1 c1) (RC.Exp xs2 c2)) (mat, cons) =
       ( addRow (toRational <$> Row (zipWith (-) xs1 xs2 <> [-1]) (c2 - c1)) .
         addEmptyCol $
         mat
-      , cons)
+      , cons { nVars = nVars + 1 } )
     fromRawConstraint (RC.Typeclass RC.Prime j) (mat, cons) =
       ( mat
-      , cons { primes = j : primes cons } )
+      , cons { primes = j : primes cons, fins = j : fins cons } )
     fromRawConstraint (RC.Typeclass tc j) (mat, cons) =
       ( mat
       , cons { fins = j : fins cons } )

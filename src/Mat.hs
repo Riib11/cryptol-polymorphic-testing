@@ -22,9 +22,7 @@ displayRow :: Row -> String
 displayRow (Row xs c) = displayRowVars xs ++ " = " ++ displayQ c
 
 displayRowVars :: [Q] -> String
-displayRowVars xs = List.intercalate " + " 
-  ((\(x, j) -> displayQ x ++ displayVar j) 
-    <$> zip xs [0..])
+displayRowVars xs = List.intercalate " + " ((\(x, j) -> displayQ x ++ displayVar j)  <$> zip xs [0..])
 
 displayVar :: Int -> String 
 displayVar j = "x" ++ show j

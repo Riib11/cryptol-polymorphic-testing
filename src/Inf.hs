@@ -44,6 +44,10 @@ displayInfQ :: InfQ -> String
 displayInfQ (Fin q) = displayQ q
 displayInfQ x = show x
 
+displayInfInt :: InfInt -> String
+displayInfInt (Fin x) = show x
+displayInfInt x = show x
+
 
 instance (Eq a, Ord a, Num a, Show a) => Num (Inf a) where
   Fin i + Fin j = Fin $ i + j
@@ -71,11 +75,19 @@ instance (Eq a, Ord a, Num a, Show a) => Num (Inf a) where
 instance (Ord a, Num a) => Ord (Inf a) where
   Fin i <= Fin j = i <= j
   
-  Fin i <= Inf (-1) = False
+  Fin i <= NegInf = False
   Fin i <= Inf 0 = i <= 0
   Fin i <= Inf 1 = True
 
-  Inf (-1) <= Fin j = True
+  NegInf <= Fin j = True
   Inf 0 <= Fin j = j >= 0
   Inf 1 <= Fin j = False
 
+  NegInf <= NegInf = True
+  NegInf <= PosInf = True
+  PosInf <= NegInf = False
+  PosInf <= PosInf = True
+
+toInfInt :: InfQ -> Maybe InfInt
+toInfInt (Fin x) = Fin <$> fromRationalToInt x 
+toInfInt (Inf x) = Inf <$> fromRationalToInt x
