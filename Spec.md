@@ -1,15 +1,36 @@
 # Spec
 
-## Raw Constraints
+## Constraints
 
-The user provides a list of _raw constraints_ defined by the following grammar:
+The user provides a list of constraints defined by the following grammar:
 
 ```
-<raw constraint> ::= <expression> <relation> <expression> | <typeclass>(<var>)
-<expression>     ::= <Q>*x1 + ... + <Q>*xN + <Q>
-<relation>       ::= = | <= | >=
-<typeclass>      ::= fin | prime
+<c>   ::= <e> <r> <e> | <tc>(<var>)
+<e>   ::= <o1> <e> | <e> <o2> <e>
+<o1>  ::= -
+<o2>  ::= + | - | * | / | ^ | %
+<r>   ::= = | <= | >=
+<tc>  ::= fin | prime
 ```
+
+## Basic Constraints
+
+The following grammar encodes the subset of _basic constraints_ handled by this
+solver/sampler.
+
+```
+<bc> ::= <be> <r> <be> | <tc>(<var>)
+<be> ::= <Q>*x1 + ... + <Q>*xN + <Q>
+```
+
+A user-provided constraint is processed into some basic consraints via the
+following rewrites:
+
+<!-- TODO: show how to handle mod -->
+```
+...
+```
+
 
 The list of relation constraints is processed into a system of linear equations,
 represented as a matrix over domain `Q`, where each relation constraint is
@@ -59,19 +80,25 @@ are collected.
 
 The collected equalities, inequalities, and typeclass constraints are sampled
 over by the following algorithm:
+
 ```
 Initialize upper bounds.
-  Each variable's upper bound is initialized as +inf.
-  Each variable that is constrained by fin updates its upper bound with largest_fin.
-  For each inequality of the form {xJ <= a{J+1}*x{J+1} + ... + aN*xN + c} in the constraints, the variable xJ updates its upper bound with  {a{J+1}*x{J+1} + ... + aN*xN + c}
+  Each variable's upper bound is initialized as infinity.
+  Each variable that is constrained by fin or prime updates its upper bound with MAX_FIN.
+  For each  inequality of the form {xJ <= a{J+1}*x{J+1} + ... + aN*xN + c} in the constraints, the variable xJ updates its upper bound to the minimum of the  current upper bound and {a{J+1}*x{J+1} + ... + aN*xN + c}. 
   For each equality of the form {xJ = e}, the variable xJ is assigned to e and does not have an upper bound.
 Sample variables.
   For each variable xJ:
     If xJ has an upper bound:
       Sample or lookup the necesssary variables and then evaluate its upper bound to v.
-      Nondeterministically branch on assignments of xJ to 0 or v.
+      If v = infinity:
+        Nondeterministically branch on assignments of xJ to samples from an exponential distribution from 0 to MAX_FIN, and a single sample of infinity.
+      Else:
+        Nondeterministically branch on assignments of xJ to samples from a uniform distribution from 0 to v.
+        If xJ is constrained by prime, then only sample prime values from this distribution.
     Otherwise:
       xJ must be equal to an expression e.
       Sample or lookup the necessary variables and then evaluate the expression to v.
+      If xJ is constrainted by prime and v is not prime, then abandon this nondeterministic branch.
       Assign xJ to v.
 ```
