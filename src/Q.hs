@@ -5,9 +5,12 @@ import Control.Monad
 
 type Q = Rational
 
-displayQ :: Rational -> String
+displayQ :: Q -> String
 displayQ (a :% b) | b == 1 = show a 
 displayQ (a :% b) | otherwise = "(" ++ show a ++ "/" ++ show b ++ ")"
+
+floorQ :: Q -> Q
+floorQ = toRational . floor
 
 isIntegral :: Q -> Bool 
 isIntegral (a :% b) = b == 1

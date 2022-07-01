@@ -42,9 +42,10 @@ extractConstraints mat@(Mat rows) cons = do
       mb_cons <-
         fmap (foldr1 (<|>)) $
         sequence
-          [ extractLeq row <*|> cons
-          , extractEqu row <*|> cons
-          ]
+          -- [ extractLeq row <*|> cons
+          -- , extractEqu row <*|> cons
+          -- ]
+          [ extractEqu row <*|> cons ]
       pure mb_cons
     
     (<*|>) :: M (Maybe (a -> b)) -> a -> M (Maybe b)

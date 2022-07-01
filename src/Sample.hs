@@ -160,8 +160,8 @@ evalSampling sampling = do
     setVar j x = State.modify $ modifyAtList j (\_ -> Right x)
 
     sampleFixedRange :: [InfQ] -> [InfQ]
-    sampleFixedRange xs = 
-      let x = minimum xs in
+    sampleFixedRange xs =
+      let x = floorQ `mapInf` minimum xs in
         if x == 0
           then [0]
           else [0, x]
