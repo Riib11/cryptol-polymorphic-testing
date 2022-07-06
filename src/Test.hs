@@ -19,13 +19,17 @@ import Test.QuickCheck.Monadic as QCM
 
 test :: IO ()
 test = do
-  let n = 4
-      rcs = 
-        -- [ RC.Relation RC.Equ (RC.Exp [1, 0] 0) (RC.Exp [0, 2] 0) -- x = y
-        -- , RC.Relation RC.Geq (RC.Exp [0, 1] 0) (RC.Exp [0, 0] 1) -- y >= 1
-        -- ]
-        [ RC.Relation RC.Equ (RC.Exp [1, 0, 0, 0] 0) (RC.Exp [0, 2, -1, -1] 0) -- x = y - z - w
-        ]
+  let 
+      -- n = 4
+      -- rcs = 
+      --   [ RC.Relation RC.Equ (RC.Exp [1, 0] 0) (RC.Exp [0, 2] 0) -- x = y
+      --   , RC.Relation RC.Geq (RC.Exp [0, 1] 0) (RC.Exp [0, 0] 1) -- y >= 1
+      --   ]
+      --   [ RC.Relation RC.Equ (RC.Exp [1, 0, 0, 0] 0) (RC.Exp [0, 2, -1, -1] 0) ] -- x = y - z - w
+      -- n = 3
+      -- rcs = [ RC.Relation RC.Equ (RC.Exp [1, 1, 1] 0) (RC.Exp [0, 0, 0] 3) ]
+      n = 3
+      rcs = [ RC.Relation RC.Leq (RC.Exp [1, 0, 0] 0) (RC.Exp [0, 1, 1] 0) ]
   ex_valss <- runM do
     mb_cons <- solveRawConstraints n rcs
     cons <- case mb_cons of 

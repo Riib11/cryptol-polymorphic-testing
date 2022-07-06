@@ -26,8 +26,11 @@ data Sample
 
 type UpperBound = [Expr InfQ]
 
-fin_largest :: (Num a, Ord a, Show a) => Inf a
-fin_largest = 128
+fin_maximum :: Num a => a 
+fin_maximum = 32
+
+step :: Int
+step = 4
 
 displaySampling :: [Sample] -> String
 displaySampling smpls = List.intercalate "\n" $ f `mapWithIndex` smpls
@@ -95,7 +98,7 @@ collectUpperBounds cons =
 
     defaultUpperBound_elim, defaultUpperBound_fin, defaultUpperBound_inf :: UpperBound
     defaultUpperBound_elim = [fromConstant n 0]
-    defaultUpperBound_fin  = [fromConstant n fin_largest]
+    defaultUpperBound_fin  = [fromConstant n $ Fin fin_maximum]
     defaultUpperBound_inf  = [fromConstant n PosInf]
 
 -- | Evaluation
@@ -137,13 +140,16 @@ evalSampling sampling = do
         Left (Right e) -> do
           x <- evalExpr e
           setVar j x
-          lift . lift $ debug 1 $ "eval " ++ displayVar j ++ " => " ++ displayInfQ x
+          lift . lift $ debug 1 $ "eval " ++ displayVar j ++ " => " ++ displayExprInfQ e ++ " => " ++ displayInfQ x
           pure x
         Left (Left es) -> do
           xs <- evalExpr `traverse` es
-          x <- lift $ ListT.fromFoldable $ sampleFixedRange xs 
+          x <- lift $ ListT.fromFoldable $ sampleFixedRange xs
           setVar j x
-          lift . lift $ debug 1 $ "eval " ++ displayVar j ++ " => " ++ displayInfQ x
+          lift . lift $ debug 1 $ "eval " ++ displayVar j ++ " => " ++ 
+            "[" ++ List.intercalate ", " (displayExprInfQ <$> es) ++ "]" ++ " => " ++ 
+            "[" ++ List.intercalate ", " (displayInfQ <$> xs) ++ "]" ++ " => " ++ 
+            displayInfQ x
           pure x
 
     evalExpr :: Expr InfQ -> EvalM InfQ
@@ -161,13 +167,26 @@ evalSampling sampling = do
 
     sampleFixedRange :: [InfQ] -> [InfQ]
     sampleFixedRange xs =
-      let x = floorQ `mapInf` minimum xs in
-        if x == 0
-          then [0]
-          else [0, x]
+      let x = floor `mapInf` minimum xs in
+        case x of
+          0 -> [0]
+          -- Fin x -> Fin . toRational <$> [0..x] -- TODO: skip by step size if you don't want total coverage
+          Fin x -> Fin . toRational <$> linearRange step x -- TODO: skip by step size if you don't want total coverage
+          PosInf -> (Fin . toRational <$> linearRange step fin_maximum) <> [PosInf]
+          _ -> error $ "sampleFixedRange: impossible range: " ++ show (displayInfQ <$> xs) ++ "\n  minimum = " ++ displayInfInt x
+          -- weight number of samples by the size of the range
+          -- i.e. larger range => more samples
 
 mapChoices :: (a -> [b]) -> [a] -> [[b]]
 mapChoices k []    = []
 mapChoices k [x]   = pure <$> k x
 mapChoices k (x:xs)= (:) <$> k x <*> mapChoices k xs
 
+linearRange :: Int -> Int -> [Int]
+linearRange step max = [ i*step | i <- [0..max `div` step] ]
+
+quadraticRange :: Int -> Int -> [Int]
+quadraticRange step max = [ overIntegral (**2) (i*step) | i <- [0..overIntegral log max `div` step ] ]
+  where 
+    overIntegral :: (Integral a, RealFrac b) => (b -> b) -> a -> a
+    overIntegral f = floor . f . fromIntegral

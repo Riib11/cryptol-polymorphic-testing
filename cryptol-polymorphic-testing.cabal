@@ -24,9 +24,10 @@ source-repository head
 
 library
   exposed-modules:
+      Check
       Constraints
       GaussElim
-      InfInt
+      Inf
       M
       Mat
       Q
