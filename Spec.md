@@ -92,9 +92,10 @@ Sample variables.
     If xJ has an upper bound:
       Sample or lookup the necesssary variables and then evaluate its upper bound to v.
       If v = infinity:
-        Nondeterministically branch on assignments of xJ to samples from an exponential distribution from 0 to MAX_FIN, and a single sample of infinity.
+        Nondeterministically branch on assignments of xJ to samples from an exponential distribution from 0 to MAX_FIN with a number of samples taken linearly proportional to the size of the range, and a single sample of infinity.
+        <!-- TODO: or, should be less than linearly proportional? -->
       Else:
-        Nondeterministically branch on assignments of xJ to samples from a uniform distribution from 0 to v.
+        Nondeterministically branch on assignments of xJ to samples from a uniform distribution from 0 to v with a number of samples taken linearly proportional to the size of the range.
         If xJ is constrained by prime, then only sample prime values from this distribution.
     Otherwise:
       xJ must be equal to an expression e.
